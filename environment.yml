@@ -2,12 +2,13 @@ name: wx-map
 channels:
   - conda-forge
 dependencies:
-  - python=3
   - gdal
-  - pygrib>=2.0.4
-  - pandas
+  - h5py
   - jupyter
-  - xlrd
+  - pandas
+  - pygrib>=2.0.4
+  - python=3
   - requests
+  - xlrd
   - pip:
     - python-language-server[all]
