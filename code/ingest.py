@@ -124,3 +124,10 @@ for fname in fnames:
 
         # Add forecast time as an attribute to this dataset
         f[group_name].attrs['forecast_date_str'] = forecast_date_str
+
+        for key in grb.keys():
+            if grb.valid_key(key):
+                val = grb[key]
+                if isinstance(val, str):
+                    f[group_name].attrs[key] = val
+
