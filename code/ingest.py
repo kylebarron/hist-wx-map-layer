@@ -30,7 +30,6 @@ import tempfile
 import h5py
 import dateutil.parser
 from datetime import datetime
-from pathlib import Path
 
 wmo_code = 'YEU'
 file_date = '20190101'
@@ -77,13 +76,8 @@ for fname in fnames:
     # 2.5km / forecast validity date in iso format > dataset
     group_name = f'{grid_size}/{valid_date_str}'
 
-    if Path(h5_save_fname).exists():
-        open_mode = 'r+'
-    else:
-        open_mode = 'w'
-
-    # f = h5py.File(h5_save_fname, open_mode)
-    with h5py.File(h5_save_fname, open_mode) as f:
+    # f = h5py.File(h5_save_fname, 'a')
+    with h5py.File(h5_save_fname, 'a') as f:
 
         # Check if a dataset for the given validity DateTime exists already in
         # the HDF5 file. If so, then the closest prediction from another file is
