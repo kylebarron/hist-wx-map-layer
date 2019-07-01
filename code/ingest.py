@@ -29,6 +29,7 @@ import tarfile
 import tempfile
 import h5py
 import dateutil.parser
+import numpy as np
 from datetime import datetime
 
 wmo_code = 'YEU'
