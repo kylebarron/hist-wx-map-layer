@@ -130,4 +130,3 @@ for fname in fnames:
                 val = grb[key]
                 if isinstance(val, str):
                     f[group_name].attrs[key] = val
-
