@@ -10,5 +10,6 @@ dependencies:
   - pygrib>=2.0.4
   - python=3
   - requests
+  - pip
   - pip:
     - python-language-server[all]
