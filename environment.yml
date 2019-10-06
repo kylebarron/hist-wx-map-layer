@@ -2,6 +2,7 @@ name: wx-map
 channels:
   - conda-forge
 dependencies:
+  - beautifulsoup4
   - boto3
   - gdal # needed?
   - h5py
