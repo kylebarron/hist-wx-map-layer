@@ -46,7 +46,7 @@ from urllib.request import urlretrieve
 
 
 @click.command()
-@click.option('-i', '--order_id', help='NDFD Order ID')
+@click.option('-i', '--order_id', required=True, help='NDFD Order ID')
 def main(order_id):
     # Start session connected to S3
     s3_session = S3(bucket_name='hist-wx-map-layer')
