@@ -36,6 +36,10 @@ For initial exploration, I'll only look at the following elements:
 | Quantitative Precipitation Forecast  | YI          |
 | Wind Speed                           | YC          |
 
+Since we're interested in historical weather for the entire United States, the third value should be `U`, which corresponds to CONUS. The first column (`Designator`) on the `NDFD_Files` tab of the above-linked spreadsheet shows the ID's for each combination of forecast element and forecast region.
+
+If you mix, for example, data that starts with `YEU` with data that starts with `YET`, you'll get arrays of different sizes, because `YEP` corresponds to hourly temperature in the Pacific Northwest, while `YEU` corresponds to hourly temperature for all of CONUS.
+
 There's a separate column in that Excel spreadsheet that gives the forecast ranges for each element. When the value of `A2ii` is `Z98`, the downloaded dataset will have forecasts at smaller intervals for the next three days. When the value of `A2ii` is `Z97`, the downloaded dataset will have forecasts for wider intervals from four to seven days in advance.
 
 Since we wish to use NDFD forecasts as a proxy for actual historical weather, and since NDFD forecasts have been created daily, only the `Z98` dataset is ever needed, because we only care about the 24 hours of data following the prediction.
@@ -100,3 +104,7 @@ print(grb.data()[2])
 
 - CONUS: Continental United States
 - WMO Category: abbreviation for specific weather element
+
+## Resources
+
+NDFD sector definitions: https://www.weather.gov/mdl/degrib_dataloc#ndfd

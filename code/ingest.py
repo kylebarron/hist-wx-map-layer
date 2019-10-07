@@ -24,75 +24,174 @@
 # TODO: Create index file on disk that has the names of the GRIB and/or tar
 # files already imported
 
+import json
 import pygrib
 import tarfile
+import requests
 import tempfile
-import h5py
-import dateutil.parser
 import numpy as np
+import dateutil.parser
+
+from io import BytesIO
+from bs4 import BeautifulSoup
 from datetime import datetime
+from pathlib import Path
+from urllib.request import urlretrieve
 
-wmo_code = 'YEU'
-file_date = '20190101'
+import boto3
+from botocore.errorfactory import ClientError
 
-# Load tar file
-tar = tarfile.open(f'../data/9959_NDFD_{wmo_code}_{file_date}.tar')
+##
+# Download index to machine; add all current id's to index; upload back to s3
+main('HAS011393857')
 
-# For each
-fnames = tar.getnames()
 
-# don't look at Z97; those are 4-7 day forecasts
-fnames = [x for x in fnames if x[3:6] != 'Z97']
+def main(order_id):
 
-h5_save_fname = f'{wmo_code}.hdf5'
+    # Get S3 credentials
+    with Path('~/.credentials/do_spaces.txt').expanduser().open() as f:
+        s3_access_key, s3_secret = [x.rstrip('\n') for x in f.readlines()]
 
-for fname in fnames:
-    print(f'Loading fname: {fname}')
+    # Start session connected to S3
+    boto_session = boto3.session.Session()
+    spaces_client = boto_session.client(
+        's3', region_name='nyc3',
+        endpoint_url='https://nyc3.digitaloceanspaces.com',
+        aws_access_key_id=s3_access_key, aws_secret_access_key=s3_secret)
 
-    # Load grib file from tar archive into memory
-    f = tar.extractfile(fname)
-    with tempfile.NamedTemporaryFile() as fp:
-        fp.write(f.read())
-        grbs = pygrib.open(fp.name)
+    tarball_urls = get_download_urls_for_order(order_id)
+    print('Got download urls for tarball')
 
-    # Only ever care about the first message, the nearest one to when the
-    # forecast was made
-    grb = grbs.message(1)
+    for tarball_url in tarball_urls:
+        wmo_code = tarball_url['wmo_code']
 
-    if grb['Nx'] == 1073:
-        grid_size = '5'
-        print('grid size is 5')
-    elif grb['Nx'] == 2145:
-        grid_size = '2.5'
-        print('grid size is 2.5')
-    else:
-        raise ValueError('Grid has unexpected number of columns')
+        with tempfile.TemporaryDirectory() as dirpath:
+            tarball_dest = download_tarball(tarball_url['tar_url'], dirpath)
+            print('Finished downloading tarball')
 
-    valid_date_str = grb.validDate.isoformat()
-    forecast_date = datetime(
-        year=grb.year, month=grb.month, day=grb.day, hour=grb.hour,
-        minute=grb.minute)
-    forecast_date_str = forecast_date.isoformat()
+            with tarfile.open(tarball_dest, 'r') as tar:
+                print('Extracting files and saving to S3')
+                extract_files_from_tarball(spaces_client, tar, wmo_code)
 
-    # 2.5km / forecast validity date in iso format > dataset
-    group_name = f'{grid_size}/{valid_date_str}'
 
-    # f = h5py.File(h5_save_fname, 'a')
-    with h5py.File(h5_save_fname, 'a') as f:
+def get_download_urls_for_order(order_id: str):
+    """Given an order id, retrieves the urls for each tarball of the order.
 
-        # Check if a dataset for the given validity DateTime exists already in
-        # the HDF5 file. If so, then the closest prediction from another file is
-        # the same validity time. In this case, if the forecast datetime of the
-        # current grb is later than the forecast datetime of the saved file,
-        # replace the saved data with the data from the current grb.
-        if group_name in f:
-            print(f'Group already exists: {group_name}')
-            existing_forecast_date_str = f[group_name].attrs['forecast_date_str']
+    Returns: (List[str]) List of tar files
+    """
+    if not order_id.startswith('HAS'):
+        raise ValueError('order_id must start with HAS')
+
+    url = f'https://www1.ncdc.noaa.gov/pub/has/{order_id}/'
+    r = requests.get(url)
+    soup = BeautifulSoup(r.content, 'html.parser')
+    ext = '.tar'
+
+    # Get the URLs of each tarball in the order
+    tar_files = [
+        url + node.get('href')
+        for node in soup.find_all('a')
+        if node.get('href').endswith(ext)]
+
+    # Only download the files for all of CONUS, these have a U in the 3rd slot
+    tar_files = [x for x in tar_files if Path(x).name[12:13] == 'U']
+
+    # Parse the URLs to create a list of dicts, where each dict has the WMO code
+    # as well as the year, month, and day of the tarball
+    tar_dict = [{
+        'tar_url': x,
+        'wmo_code': Path(x).name[10:12],
+        'year': int(Path(x).name[14:18]),
+        'month': int(Path(x).name[18:20]),
+        'day': int(Path(x).name[20:22]), } for x in tar_files]
+    return tar_dict
+
+
+def download_tarball(tarball_url: str, dirpath: str):
+    """Download tarball to disk. This uses urllib3 instead of requests in order
+    to easily download files larger than memory
+    """
+    tarball_name = Path(tarball_url).name
+    dest = Path(dirpath) / tarball_name
+    urlretrieve(tarball_url, dest)
+    return dest
+
+
+def extract_files_from_tarball(
+        s3_client, tar, wmo_code, s3_bucket_name='hist-wx-map-layer'):
+    """Extract files from tarball and save to S3
+
+    S3 path: wmo_code/year/month/day/hour.{npy,json}
+
+    Args:
+        s3_client: a boto3 client instance that is already connected to an S3 bucket
+        tar: open tarfile
+    """
+    # For each
+    fnames = tar.getnames()
+
+    # don't look at Z97; those are 4-7 day forecasts
+    fnames = [x for x in fnames if x[3:6] != 'Z97']
+
+    for fname in fnames:
+        print(f'Loading fname: {fname}')
+
+        # Load grib file from tar archive into memory
+        f = tar.extractfile(fname)
+        with tempfile.NamedTemporaryFile() as fp:
+            fp.write(f.read())
+            grbs = pygrib.open(fp.name)
+
+        # Only ever care about the first message, the nearest one to when the
+        # forecast was made
+        grb = grbs.message(1)
+
+        metadata = {}
+
+        if grb['Nx'] == 1073:
+            metadata['grid_size'] = '5'
+        elif grb['Nx'] == 2145:
+            metadata['grid_size'] = '2.5'
+        else:
+            raise ValueError('Grid has unexpected number of columns')
+
+        # valid_date is when the forecast is _for_
+        # forecast_date is when the forecast was _made_
+        valid_date = grb.validDate
+        valid_date_str = valid_date.isoformat()
+        forecast_date = datetime(
+            year=grb.year, month=grb.month, day=grb.day, hour=grb.hour,
+            minute=grb.minute)
+        forecast_date_str = forecast_date.isoformat()
+
+        metadata['valid_date'] = valid_date_str
+        metadata['forecast_date'] = forecast_date_str
+
+        # Add all key-value metadata from grb to metadata file
+        for key in grb.keys():
+            if grb.valid_key(key):
+                val = grb[key]
+                if isinstance(val, str):
+                    metadata[key] = val
+
+        s3_path = f'ndfd_data/{wmo_code}/{metadata["grid_size"]}'
+        s3_path += f'/{valid_date.year}/{valid_date.month}'
+        s3_path += f'/{valid_date.day}/{valid_date.hour}'
+
+        # If npy file already exists, check when the forecast was made (saved in
+        # the json file)
+        file_exists = s3_file_exists(
+            s3_client, s3_bucket_name, s3_path + '.npy')
+        if file_exists:
+            # .npy file already exists: check the forecast time in the json file
+            file_metadata = s3_client.get_object(
+                Bucket=s3_bucket_name, Key=s3_path + '.json')
+            file_metadata_dict = json.loads(
+                file_metadata['Body'].read().decode('utf-8'))
+
+            existing_forecast_date_str = file_metadata_dict['forecast_date']
             existing_forecast_date = dateutil.parser.parse(
                 existing_forecast_date_str)
-
-            print(f'existing forecast date: {existing_forecast_date_str}')
-            print(f'current memory forecast date: {forecast_date_str}')
 
             if forecast_date <= existing_forecast_date:
                 print('NOT replacing')
@@ -100,34 +199,31 @@ for fname in fnames:
 
             print('replacing')
 
-        # Write data to HDF5 file and then write forecast timestamp
-        # First check that grid hasn't changed
-        msg = 'ERROR! Grid has changed! Stopping'
-        if f'{grid_size}/lats' in f:
-            # Check that lats array is still the same
-            assert np.array_equal(f[f'{grid_size}/lats'][:], grb.data()[1]), msg
-        else:
-            f.create_dataset(f'{grid_size}/lats', data=grb.data()[1])
+        save_grb_to_s3(grb, s3_bucket_name, s3_client, s3_path, metadata)
 
-        if f'{grid_size}/lons' in f:
-            # Check that lons array is still the same
-            assert np.array_equal(f[f'{grid_size}/lons'][:], grb.data()[2]), msg
-        else:
-            f.create_dataset(f'{grid_size}/lons', data=grb.data()[2])
 
-        if group_name in f:
-            # Replace dataset
-            h5data = f[group_name]
-            h5data[...] = grb.data()[0]
-        else:
-            # Create dataset
-            f.create_dataset(group_name, data=grb.data()[0])
+def save_grb_to_s3(grb, s3_bucket_name, s3_client, s3_path, metadata):
+    # Save JSON file with metadata
+    # Save JSON first so that if the numpy array exists, the metadata always exists
+    json_buf = json.dumps(metadata).encode()
+    s3_client.put_object(
+        Body=json_buf, Bucket=s3_bucket_name, Key=s3_path + '.json')
 
-        # Add forecast time as an attribute to this dataset
-        f[group_name].attrs['forecast_date_str'] = forecast_date_str
+    # Save numpy array
+    buf = BytesIO()
+    np.save(buf, grb.data()[0])
+    s3_client.put_object(
+        Body=buf.read(), Bucket=s3_bucket_name, Key=s3_path + '.npy')
+    print(f'Array saved to {s3_path}.npy')
 
-        for key in grb.keys():
-            if grb.valid_key(key):
-                val = grb[key]
-                if isinstance(val, str):
-                    f[group_name].attrs[key] = val
+
+def s3_file_exists(s3_client, s3_bucket_name, s3_key):
+    try:
+        s3_client.head_object(Bucket=s3_bucket_name, Key=s3_key)
+        return True
+    except ClientError:
+        return False
+
+
+if __name__ == '__main__':
+    main()
