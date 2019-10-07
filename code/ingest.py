@@ -41,8 +41,9 @@ import dateutil.parser
 
 from io import BytesIO
 from bs4 import BeautifulSoup
-from datetime import datetime
+from typing import Optional
 from pathlib import Path
+from datetime import datetime
 from urllib.request import urlretrieve
 
 ##
@@ -51,11 +52,22 @@ from urllib.request import urlretrieve
 
 @click.command()
 @click.option('-i', '--order_id', required=True, help='NDFD Order ID')
-def main(order_id):
+@click.option('-s', '--start_date', required=False, help='Start date')
+@click.option('-e', '--end_date', required=False, help='End date')
+def main(
+        order_id: str, start_date: Optional[str] = None,
+        end_date: Optional[str] = None):
+    """Main program
+
+    Args:
+        - order_id: NDFD order id for bulk download
+        - start_date: date in yyyy-mm-dd format to start import. This will only download tarballs on or after this date.
+        - end_date: date in yyyy-mm-dd format to end import. This will only download tarballs on or before this date
+    """
     # Start session connected to S3
     s3_session = S3(bucket_name='hist-wx-map-layer')
 
-    tarball_urls = get_download_urls_for_order(order_id)
+    tarball_urls = get_download_urls_for_order(order_id, start_date, end_date)
     print('Got download urls for tarball')
 
     for tarball_url in tarball_urls:
@@ -70,13 +82,25 @@ def main(order_id):
                 extract_files_from_tarball(s3_session, tar, wmo_code)
 
 
-def get_download_urls_for_order(order_id: str):
+def get_download_urls_for_order(
+        order_id: str, start_date: Optional[str] = None,
+        end_date: Optional[str] = None):
     """Given an order id, retrieves the urls for each tarball of the order.
+
+    Args:
+        - order_id: NDFD order id for bulk download
+        - start_date: date in yyyy-mm-dd format to start import. This will only download tarballs on or after this date.
+        - end_date: date in yyyy-mm-dd format to end import. This will only download tarballs on or before this date
 
     Returns: (List[str]) List of tar files
     """
     if not order_id.startswith('HAS'):
         raise ValueError('order_id must start with HAS')
+
+    if start_date is not None:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+    if end_date is not None:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d')
 
     url = f'https://www1.ncdc.noaa.gov/pub/has/{order_id}/'
     r = requests.get(url)
@@ -91,6 +115,17 @@ def get_download_urls_for_order(order_id: str):
 
     # Only download the files for all of CONUS, these have a U in the 3rd slot
     tar_files = [x for x in tar_files if Path(x).name[12:13] == 'U']
+
+    # Only download tarballs between start_date and end_date
+    if start_date is not None:
+        tar_files = [
+            x for x in tar_files
+            if datetime.strptime(Path(x).name[14:22], '%Y%m%d') >= start_date]
+
+    if end_date is not None:
+        tar_files = [
+            x for x in tar_files
+            if datetime.strptime(Path(x).name[14:22], '%Y%m%d') <= end_date]
 
     # Parse the URLs to create a list of dicts, where each dict has the WMO code
     # as well as the year, month, and day of the tarball
