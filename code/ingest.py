@@ -51,15 +51,16 @@ from urllib.request import urlretrieve
 
 
 @click.command()
-@click.option('-i', '--order_id', required=True, help='NDFD Order ID')
-@click.option('-s', '--start_date', required=False, help='Start date')
-@click.option('-e', '--end_date', required=False, help='End date')
+@click.option('-i', '--order-id', required=True, help='NDFD Order ID')
+@click.option('-s', '--start-date', required=False, help='Start date')
+@click.option('-e', '--end-date', required=False, help='End date')
 def main(
         order_id: str, start_date: Optional[str] = None,
         end_date: Optional[str] = None):
     """Main program
 
     Args:
+
         - order_id: NDFD order id for bulk download
         - start_date: date in yyyy-mm-dd format to start import. This will only download tarballs on or after this date.
         - end_date: date in yyyy-mm-dd format to end import. This will only download tarballs on or before this date
