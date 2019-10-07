@@ -12,14 +12,10 @@ The clearest way to do this is with data from the [National Digital Forecast Dat
 
 - Download large sections of bulk historical forecasts for a single WMO category at a time.
 - It appears that there are NDFD files saved hourly, but forecasts for 3 to 24 hour periods. Use the file closest to the forecast valid time.
-- Update index file to keep track of which files have been imported.
-- Extract numerical data from grid, recast it to smallest data type, i.e. uint16
-- Append to HDF5 table on disk, using PyTables' [`EArray`][EArray], where the enlargeable dimension is a `DateTime`. Note: if HDF5 is too complicated, just save into an `.npy` file for each large extract, then later concatenate them.
-- These HDF5 tables should be small enough, at least for daily attributes like maximum and minimum temperature, to have a single HDF5
-- After all the data for a given WMO category is extracted an is on disk, create distributions of the data point for day/week/month level of interest.
+<!-- - Update index file to keep track of which files have been imported. -->
+- Extract numerical data from grid, save it as a Numpy file (.npy) to S3
+- After all the data for a given WMO category is extracted, create distributions of the measurement type for day/week/month of interest.
 - With small data files with distributions of interest, set up code to map a clicked point to a gridded cell.
-
-[EArray]: https://www.pytables.org/usersguide/libref/homogenous_storage.html#earrayclassdescr
 
 ## NDFD Notes
 
