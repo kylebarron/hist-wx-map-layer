@@ -28,6 +28,7 @@ class S3():
         except ClientError:
             return False
 
+    # From https://alexwlchan.net/2019/07/listing-s3-keys/
     def get_matching_s3_objects(self, prefix="", suffix=""):
         """
         Generate objects in an S3 bucket.

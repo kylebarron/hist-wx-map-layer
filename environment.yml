@@ -8,10 +8,12 @@ dependencies:
   - gdal # needed?
   - jupyter
   - numpy
+  - pandas
   - pygrib>=2.0.4
   - python=3
   - python-dateutil
   - requests
+  - tabulate
   - pip
   - pip:
     - python-language-server[all]
