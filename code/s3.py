@@ -13,8 +13,8 @@ class S3():
         with Path('~/.credentials/do_spaces.txt').expanduser().open() as f:
             access_key, secret = [x.rstrip('\n') for x in f.readlines()]
 
-        boto_session = boto3.session.Session()
-        self.client = boto_session.client(
+        self.session = boto3.session.Session()
+        self.client = self.session.client(
             's3', region_name='nyc3',
             endpoint_url='https://nyc3.digitaloceanspaces.com',
             aws_access_key_id=access_key, aws_secret_access_key=secret)
@@ -28,22 +28,46 @@ class S3():
         except ClientError:
             return False
 
-    def list_keys(self, prefix_string=None):
-        """Get a list of all keys in an S3 bucket."""
-        keys = []
+    def get_matching_s3_objects(self, prefix="", suffix=""):
+        """
+        Generate objects in an S3 bucket.
+
+        :param prefix: Only fetch objects whose key starts with
+            this prefix (optional).
+        :param suffix: Only fetch objects whose keys end with
+            this suffix (optional).
+        """
+        paginator = self.client.get_paginator("list_objects")
 
         kwargs = {'Bucket': self.bucket_name}
-        if prefix_string is not None:
-            kwargs['Prefix'] = prefix_string
 
-        while True:
-            resp = self.client.list_objects_v2(**kwargs)
-            for obj in resp['Contents']:
-                keys.append(obj['Key'])
+        # We can pass the prefix directly to the S3 API.  If the user has passed
+        # a tuple or list of prefixes, we go through them one by one.
+        if isinstance(prefix, str):
+            prefixes = (prefix, )
+        else:
+            prefixes = prefix
 
-            try:
-                kwargs['ContinuationToken'] = resp['NextContinuationToken']
-            except KeyError:
-                break
+        for key_prefix in prefixes:
+            kwargs["Prefix"] = key_prefix
 
-        return keys
+            for page in paginator.paginate(**kwargs):
+                try:
+                    contents = page["Contents"]
+                except KeyError:
+                    return
+
+                for obj in contents:
+                    key = obj["Key"]
+                    if key.endswith(suffix):
+                        yield obj
+
+    def get_matching_s3_keys(self, prefix="", suffix=""):
+        """
+        Generate the keys in an S3 bucket.
+
+        :param prefix: Only fetch keys that start with this prefix (optional).
+        :param suffix: Only fetch keys that end with this suffix (optional).
+        """
+        for obj in self.get_matching_s3_objects(prefix, suffix):
+            yield obj["Key"]
