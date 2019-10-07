@@ -27,6 +27,7 @@
 from s3 import S3
 
 import json
+import click
 import pygrib
 import tarfile
 import requests
@@ -44,6 +45,8 @@ from urllib.request import urlretrieve
 # Download index to machine; add all current id's to index; upload back to s3
 
 
+@click.command()
+@click.option('-i', '--order_id', help='NDFD Order ID')
 def main(order_id):
     # Start session connected to S3
     s3_session = S3(bucket_name='hist-wx-map-layer')

@@ -4,12 +4,13 @@ channels:
 dependencies:
   - beautifulsoup4
   - boto3
+  - click
   - gdal # needed?
-  - h5py
   - jupyter
-  - pandas
+  - numpy
   - pygrib>=2.0.4
   - python=3
+  - python-dateutil
   - requests
   - pip
   - pip:
