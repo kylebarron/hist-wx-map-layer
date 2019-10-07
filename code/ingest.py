@@ -24,6 +24,8 @@
 # TODO: Create index file on disk that has the names of the GRIB and/or tar
 # files already imported
 
+from s3 import S3
+
 import json
 import pygrib
 import tarfile
@@ -38,26 +40,13 @@ from datetime import datetime
 from pathlib import Path
 from urllib.request import urlretrieve
 
-import boto3
-from botocore.errorfactory import ClientError
-
 ##
 # Download index to machine; add all current id's to index; upload back to s3
-main('HAS011393857')
 
 
 def main(order_id):
-
-    # Get S3 credentials
-    with Path('~/.credentials/do_spaces.txt').expanduser().open() as f:
-        s3_access_key, s3_secret = [x.rstrip('\n') for x in f.readlines()]
-
     # Start session connected to S3
-    boto_session = boto3.session.Session()
-    spaces_client = boto_session.client(
-        's3', region_name='nyc3',
-        endpoint_url='https://nyc3.digitaloceanspaces.com',
-        aws_access_key_id=s3_access_key, aws_secret_access_key=s3_secret)
+    s3_session = S3(bucket_name='hist-wx-map-layer')
 
     tarball_urls = get_download_urls_for_order(order_id)
     print('Got download urls for tarball')
@@ -71,7 +60,7 @@ def main(order_id):
 
             with tarfile.open(tarball_dest, 'r') as tar:
                 print('Extracting files and saving to S3')
-                extract_files_from_tarball(spaces_client, tar, wmo_code)
+                extract_files_from_tarball(s3_session, tar, wmo_code)
 
 
 def get_download_urls_for_order(order_id: str):
@@ -117,14 +106,13 @@ def download_tarball(tarball_url: str, dirpath: str):
     return dest
 
 
-def extract_files_from_tarball(
-        s3_client, tar, wmo_code, s3_bucket_name='hist-wx-map-layer'):
+def extract_files_from_tarball(s3_session, tar, wmo_code):
     """Extract files from tarball and save to S3
 
     S3 path: wmo_code/year/month/day/hour.{npy,json}
 
     Args:
-        s3_client: a boto3 client instance that is already connected to an S3 bucket
+        s3_session: an S3 session object (defined in s3.py) that is already connected to an S3 bucket
         tar: open tarfile
     """
     # For each
@@ -180,12 +168,11 @@ def extract_files_from_tarball(
 
         # If npy file already exists, check when the forecast was made (saved in
         # the json file)
-        file_exists = s3_file_exists(
-            s3_client, s3_bucket_name, s3_path + '.npy')
+        file_exists = s3_session.file_exists(s3_path + '.npy')
         if file_exists:
             # .npy file already exists: check the forecast time in the json file
-            file_metadata = s3_client.get_object(
-                Bucket=s3_bucket_name, Key=s3_path + '.json')
+            file_metadata = s3_session.client.get_object(
+                Bucket=s3_session.bucket_name, Key=s3_path + '.json')
             file_metadata_dict = json.loads(
                 file_metadata['Body'].read().decode('utf-8'))
 
@@ -199,30 +186,22 @@ def extract_files_from_tarball(
 
             print('replacing')
 
-        save_grb_to_s3(grb, s3_bucket_name, s3_client, s3_path, metadata)
+        save_grb_to_s3(grb, s3_session, s3_path, metadata)
 
 
-def save_grb_to_s3(grb, s3_bucket_name, s3_client, s3_path, metadata):
+def save_grb_to_s3(grb, s3_session, s3_path, metadata):
     # Save JSON file with metadata
     # Save JSON first so that if the numpy array exists, the metadata always exists
     json_buf = json.dumps(metadata).encode()
-    s3_client.put_object(
-        Body=json_buf, Bucket=s3_bucket_name, Key=s3_path + '.json')
+    s3_session.client.put_object(
+        Body=json_buf, Bucket=s3_session.bucket_name, Key=s3_path + '.json')
 
     # Save numpy array
     buf = BytesIO()
     np.save(buf, grb.data()[0])
-    s3_client.put_object(
-        Body=buf.read(), Bucket=s3_bucket_name, Key=s3_path + '.npy')
+    s3_session.client.put_object(
+        Body=buf.read(), Bucket=s3_session.bucket_name, Key=s3_path + '.npy')
     print(f'Array saved to {s3_path}.npy')
-
-
-def s3_file_exists(s3_client, s3_bucket_name, s3_key):
-    try:
-        s3_client.head_object(Bucket=s3_bucket_name, Key=s3_key)
-        return True
-    except ClientError:
-        return False
 
 
 if __name__ == '__main__':
