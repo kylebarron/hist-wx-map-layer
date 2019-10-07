@@ -27,3 +27,23 @@ class S3():
             return True
         except ClientError:
             return False
+
+    def list_keys(self, prefix_string=None):
+        """Get a list of all keys in an S3 bucket."""
+        keys = []
+
+        kwargs = {'Bucket': self.bucket_name}
+        if prefix_string is not None:
+            kwargs['Prefix'] = prefix_string
+
+        while True:
+            resp = self.client.list_objects_v2(**kwargs)
+            for obj in resp['Contents']:
+                keys.append(obj['Key'])
+
+            try:
+                kwargs['ContinuationToken'] = resp['NextContinuationToken']
+            except KeyError:
+                break
+
+        return keys
