@@ -2,24 +2,28 @@
 
 # Ingest script
 #
-# This script takes a tarball of GRIB files and extracts the first band: the one
-# whose validity time is closest to the forecast time. It saves them into an
-# HDF5 file where the paths are akin to the following.
+# This script takes a directory of tarred GRIB files, downloads and extracts
+# each GRIB file, and saves the first band in the GRIB file as a Numpy array in
+# S3. The first frame of the GRIB file is the forecast whose validity time is
+# closest to the forecast time. (Forecast time is when the forecast was _made_
+# and validity time is when the forecast is _for_). It saves each array as a
+# separate Numpy (.npy) file in S3.
+
+# Sometimes, there are multiple forecasts created within the span of one hour.
+# This script keeps the forecast that is closest to the valid time.
+# Alternatively, if there is a span of multiple hours with no forecast, there
+# may be a gap between validityTimes of neighboring arrays of more than one
+# hour.
+
+# Files are stored with the following directory scheme:
+# 'ndfd_data'/wmo_code/grid_size/valid_year/valid_month/valid_day/valid_hour
 #
-# First `2.5/` or `5/`. The datasets under the former have 2.5km grids and the
-# datasets under the latter have 5km grids.
-#
-# Then the next leaf of the path is an ISO8601-formatted date that refers to the
-# **validity date** for the data point in question. There are two special leafs:
-# `lats` and `lons`, which are arrays that give the latitude and longitude of
-# each point in the grid.
-#
-# I.e.
-# 2.5/2019-01-01T03:00:00
-# 2.5/2019-01-01T04:00:00
-# 2.5/2019-01-01T05:00:00
-# 2.5/lats
-# 2.5/lons
+# 'ndfd_data' is a constant string
+# wmo_code is a two-letter code corresponding to the type of weather measurement
+# grid_size is either '2.5' or '5', depending on whether a 2.5 or 5km grid is
+# used
+# valid_year, valid_month, valid_day, and valid_hour correspond to the datetime
+# for which the forecast is valid
 
 # TODO: Create index file on disk that has the names of the GRIB and/or tar
 # files already imported
