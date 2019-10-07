@@ -176,8 +176,7 @@ def extract_files_from_tarball(s3_session, tar, wmo_code):
             # .npy file already exists: check the forecast time in the json file
             file_metadata = s3_session.client.get_object(
                 Bucket=s3_session.bucket_name, Key=s3_path + '.json')
-            file_metadata_dict = json.loads(
-                file_metadata['Body'].read().decode('utf-8'))
+            file_metadata_dict = json.loads(file_metadata['Body'].read())
 
             existing_forecast_date_str = file_metadata_dict['forecast_date']
             existing_forecast_date = dateutil.parser.parse(
@@ -195,9 +194,10 @@ def extract_files_from_tarball(s3_session, tar, wmo_code):
 def save_grb_to_s3(grb, s3_session, s3_path, metadata):
     # Save JSON file with metadata
     # Save JSON first so that if the numpy array exists, the metadata always exists
-    json_buf = json.dumps(metadata).encode()
+    json_buf = json.dumps(metadata)
     s3_session.client.put_object(
-        Body=json_buf, Bucket=s3_session.bucket_name, Key=s3_path + '.json')
+        Body=json_buf, Bucket=s3_session.bucket_name, Key=s3_path + '.json',
+        ContentType='application/json')
 
     # Save numpy array
     buf = BytesIO()
