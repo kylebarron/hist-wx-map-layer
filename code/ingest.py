@@ -238,15 +238,17 @@ def save_grb_to_s3(grb, s3_session, s3_path, metadata):
     s3_session.client.put_object(
         Body=json_buf, Bucket=s3_session.bucket_name, Key=s3_path + '.json',
         ContentType='application/json')
+    del json_buf
 
     # Save numpy array
-    buf = BytesIO()
-    np.save(buf, grb.data()[0])
-    # Must seek to beginning of buffer before saving
-    # https://stackoverflow.com/a/26880042
-    buf.seek(0)
-    s3_session.client.put_object(
-        Body=buf.read(), Bucket=s3_session.bucket_name, Key=s3_path + '.npy')
+    with BytesIO() as buf:
+        np.save(buf, grb.data()[0])
+        # Must seek to beginning of buffer before saving
+        # https://stackoverflow.com/a/26880042
+        buf.seek(0)
+        s3_session.client.put_object(
+            Body=buf.read(), Bucket=s3_session.bucket_name,
+            Key=s3_path + '.npy')
     print(f'Array saved to {s3_path}.npy')
 
 
