@@ -175,7 +175,11 @@ def extract_files_from_tarball(s3_session, tar, wmo_code):
 
         # Only ever care about the first message, the nearest one to when the
         # forecast was made
-        grb = grbs.message(1)
+        # Some older files may be corrupted or not have any frames
+        try:
+            grb = grbs.message(1)
+        except:
+            continue
 
         metadata = {}
 
