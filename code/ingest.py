@@ -28,24 +28,24 @@
 # TODO: Create index file on disk that has the names of the GRIB and/or tar
 # files already imported
 
-from s3 import S3
-
 import json
-import click
-import pygrib
 import re
 import tarfile
-import requests
 import tempfile
-import numpy as np
-import dateutil.parser
-
-from io import BytesIO
-from bs4 import BeautifulSoup
-from typing import Optional
-from pathlib import Path
 from datetime import datetime
+from io import BytesIO
+from pathlib import Path
+from typing import Optional
 from urllib.request import urlretrieve
+
+import click
+import dateutil.parser
+import numpy as np
+import requests
+from bs4 import BeautifulSoup
+
+import pygrib
+from s3 import S3
 
 ##
 # Download index to machine; add all current id's to index; upload back to s3
