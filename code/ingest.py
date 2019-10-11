@@ -164,7 +164,7 @@ def extract_files_from_tarball(s3_session, tar, wmo_code):
 
     # don't look at Z97; those are 4-7 day forecasts
     # also, sometimes there's another extraneous folder in the tar bundle
-    fnames = [x for x in fnames if re.search(r'^\w{3}Z98_\w{4}_\d{12}$', x)]
+    fnames = [x for x in fnames if re.search(r'^\w{3}Z9[89]_\w{4}_\d{12}$', x)]
 
     for fname in fnames:
         print(f'Loading fname: {fname}')
