@@ -33,6 +33,7 @@ from s3 import S3
 import json
 import click
 import pygrib
+import re
 import tarfile
 import requests
 import tempfile
@@ -162,7 +163,8 @@ def extract_files_from_tarball(s3_session, tar, wmo_code):
     fnames = tar.getnames()
 
     # don't look at Z97; those are 4-7 day forecasts
-    fnames = [x for x in fnames if x[3:6] != 'Z97']
+    # also, sometimes there's another extraneous folder in the tar bundle
+    fnames = [x for x in fnames if re.search(r'^\w{3}Z98_\w{4}_\d{12}$', x)]
 
     for fname in fnames:
         print(f'Loading fname: {fname}')
