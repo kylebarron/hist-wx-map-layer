@@ -2,8 +2,9 @@
 
 from pathlib import Path
 
-import boto3
 from botocore.errorfactory import ClientError
+
+import boto3
 
 
 class S3():
