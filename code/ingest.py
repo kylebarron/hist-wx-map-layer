@@ -76,7 +76,7 @@ def main(
         wmo_code = tarball_url['wmo_code']
 
         with tempfile.TemporaryDirectory() as dirpath:
-            tarball_dest = download_tarball(tarball_url['tar_url'], dirpath)
+            tarball_dest = download_tarball(tarball_url['tar_url'], dirpath.name)
             print('Finished downloading tarball')
 
             with tarfile.open(tarball_dest, 'r') as tar:
@@ -173,6 +173,7 @@ def extract_files_from_tarball(s3_session, tar, wmo_code):
         f = tar.extractfile(fname)
         with tempfile.NamedTemporaryFile() as fp:
             fp.write(f.read())
+            ## NOTE!!! This should be in a context manager
             grbs = pygrib.open(fp.name)
 
         # Only ever care about the first message, the nearest one to when the
