@@ -1,5 +1,7 @@
 # Historical weather map layer
 
+**Update**: an updated project with more limited scope is ongoing at https://github.com/nst-guide/ndfd_historical
+
 ## Objective
 
 Create a map layer with historical weather information spanning the continental United States.
